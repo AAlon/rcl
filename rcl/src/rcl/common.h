@@ -22,6 +22,7 @@ extern "C"
 
 #include "rcl/types.h"
 
+#define INTRA_ONLY TRUE
 /// Retrieve the value of the given environment variable if it exists, or "".
 /* The returned cstring is only valid until the next time this function is
  * called, because it is a direct pointer to the static storage.

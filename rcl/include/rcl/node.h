@@ -30,6 +30,8 @@ extern "C"
 #include "rcl/types.h"
 #include "rcl/visibility_control.h"
 
+#define INTRA_ONLY TRUE
+
 struct rcl_guard_condition_t;
 struct rcl_node_impl_t;
 

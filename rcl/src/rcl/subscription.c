@@ -34,6 +34,7 @@ typedef struct rcl_subscription_impl_t
 {
   rcl_subscription_options_t options;
   rmw_subscription_t * rmw_handle;
+  char topic_name[256];
 } rcl_subscription_impl_t;
 
 rcl_subscription_t
@@ -52,7 +53,7 @@ rcl_subscription_init(
   const rcl_subscription_options_t * options)
 {
   rcl_ret_t fail_ret = RCL_RET_ERROR;
-
+  fprintf(stderr, "rcl_subscription_init for topic %s\n", topic_name);
   // Check options and allocator first, so the allocator can be used in errors.
   RCL_CHECK_ARGUMENT_FOR_NULL(options, RCL_RET_INVALID_ARGUMENT);
   rcl_allocator_t * allocator = (rcl_allocator_t *)&options->allocator;
@@ -160,6 +161,8 @@ rcl_subscription_init(
   // Fill out the implemenation struct.
   // rmw_handle
   // TODO(wjwwood): pass allocator once supported in rmw api.
+
+#ifndef INTRA_ONLY
   subscription->impl->rmw_handle = rmw_create_subscription(
     rcl_node_get_rmw_handle(node),
     type_support,
@@ -170,6 +173,12 @@ rcl_subscription_init(
     RCL_SET_ERROR_MSG(rmw_get_error_string().str);
     goto fail;
   }
+#else
+    fprintf(stderr, "Skipping rmw_create_subscription\n");
+    memset(subscription->impl->topic_name, 0, 256);
+    strncpy(subscription->impl->topic_name, remapped_topic_name, 255);
+    fprintf(stderr, "Copied tipic name to: %s, %s\n", subscription->impl->topic_name, expanded_topic_name);
+#endif
   // options
   subscription->impl->options = *options;
   RCUTILS_LOG_DEBUG_NAMED(ROS_PACKAGE_NAME, "Subscription initialized");
@@ -206,12 +215,14 @@ rcl_subscription_fini(rcl_subscription_t * subscription, rcl_node_t * node)
     if (!rmw_node) {
       return RCL_RET_INVALID_ARGUMENT;
     }
+#ifndef INTRA_ONLY
     rmw_ret_t ret =
       rmw_destroy_subscription(rmw_node, subscription->impl->rmw_handle);
     if (ret != RMW_RET_OK) {
       RCL_SET_ERROR_MSG(rmw_get_error_string().str);
       result = RCL_RET_ERROR;
     }
+#endif
     allocator.deallocate(subscription->impl, allocator.state);
   }
   RCUTILS_LOG_DEBUG_NAMED(ROS_PACKAGE_NAME, "Subscription finalized");
@@ -304,7 +315,7 @@ rcl_subscription_get_topic_name(const rcl_subscription_t * subscription)
   if (!rcl_subscription_is_valid(subscription)) {
     return NULL;  // error already set
   }
-  return subscription->impl->rmw_handle->topic_name;
+  return subscription->impl->topic_name; //rmw_handle->topic_name;
 }
 
 #define _subscription_get_options(subscription) & subscription->impl->options
@@ -333,8 +344,11 @@ rcl_subscription_is_valid(const rcl_subscription_t * subscription)
   RCL_CHECK_FOR_NULL_WITH_MSG(subscription, "subscription pointer is invalid", return false);
   RCL_CHECK_FOR_NULL_WITH_MSG(
     subscription->impl, "subscription's implementation is invalid", return false);
+
+#ifndef INTRA_ONLY
   RCL_CHECK_FOR_NULL_WITH_MSG(
     subscription->impl->rmw_handle, "subscription's rmw handle is invalid", return false);
+#endif
   return true;
 }
 

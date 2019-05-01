@@ -38,6 +38,7 @@ typedef struct rcl_publisher_impl_t
   rmw_qos_profile_t actual_qos;
   rcl_context_t * context;
   rmw_publisher_t * rmw_handle;
+  char topic_name[256];
 } rcl_publisher_impl_t;
 
 rcl_publisher_t
@@ -165,6 +166,9 @@ rcl_publisher_init(
   // Fill out implementation struct.
   // rmw handle (create rmw publisher)
   // TODO(wjwwood): pass along the allocator to rmw when it supports it
+
+//#ifdef f
+#ifndef INTRA_ONLY
   publisher->impl->rmw_handle = rmw_create_publisher(
     rcl_node_get_rmw_handle(node),
     type_support,
@@ -183,6 +187,12 @@ rcl_publisher_init(
   }
   publisher->impl->actual_qos.avoid_ros_namespace_conventions =
     options->qos.avoid_ros_namespace_conventions;
+#else
+  fprintf(stderr, "Skipping create publisher\n");
+  publisher->impl->actual_qos = options->qos;
+  memset(publisher->impl->topic_name, 0, 256);
+  strncpy(publisher->impl->topic_name, remapped_topic_name, 255);
+#endif
   // options
   publisher->impl->options = *options;
   RCUTILS_LOG_DEBUG_NAMED(ROS_PACKAGE_NAME, "Publisher initialized");
@@ -251,10 +261,12 @@ rcl_publish(const rcl_publisher_t * publisher, const void * ros_message)
     return RCL_RET_PUBLISHER_INVALID;  // error already set
   }
   RCL_CHECK_ARGUMENT_FOR_NULL(ros_message, RCL_RET_INVALID_ARGUMENT);
+#ifndef INTRA_ONLY
   if (rmw_publish(publisher->impl->rmw_handle, ros_message) != RMW_RET_OK) {
     RCL_SET_ERROR_MSG(rmw_get_error_string().str);
     return RCL_RET_ERROR;
   }
+#endif
   return RCL_RET_OK;
 }
 
@@ -283,7 +295,8 @@ rcl_publisher_get_topic_name(const rcl_publisher_t * publisher)
   if (!rcl_publisher_is_valid_except_context(publisher)) {
     return NULL;  // error already set
   }
-  return publisher->impl->rmw_handle->topic_name;
+  //return publisher->impl->rmw_handle->topic_name;
+  return publisher->impl->topic_name;
 }
 
 #define _publisher_get_options(pub) & pub->impl->options
@@ -325,8 +338,10 @@ rcl_publisher_is_valid(const rcl_publisher_t * publisher)
     RCL_SET_ERROR_MSG("publisher's context is invalid");
     return false;
   }
+#ifndef INTRA_ONLY
   RCL_CHECK_FOR_NULL_WITH_MSG(
     publisher->impl->rmw_handle, "publisher's rmw handle is invalid", return false);
+#endif
   return true;
 }
 
@@ -336,8 +351,11 @@ rcl_publisher_is_valid_except_context(const rcl_publisher_t * publisher)
   RCL_CHECK_FOR_NULL_WITH_MSG(publisher, "publisher pointer is invalid", return false);
   RCL_CHECK_FOR_NULL_WITH_MSG(
     publisher->impl, "publisher implementation is invalid", return false);
+
+#ifndef INTRA_ONLY
   RCL_CHECK_FOR_NULL_WITH_MSG(
     publisher->impl->rmw_handle, "publisher's rmw handle is invalid", return false);
+#endif
   return true;
 }
 
